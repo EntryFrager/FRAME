@@ -1,0 +1,588 @@
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 1
+frame.asm
+
+
+
+      1	0000			     .model tiny
+      2	0000			     .code
+      3				     .186
+      4				     org 100h
+      5
+      6	      =0080		     CMD_PTR   equ 80h
+      7	      =B800		     VIDEO_PTR equ 0b800h
+      8
+      9	      =0009		     N_SYM_FOR_FRAME equ 09d
+     10
+     11	      =000A		     X0	equ 10d			     ; Initial x-coordinate of the left	corner of the frame
+     12	      =0005		     Y0	equ 05d			     ; Initial y-coordinate of the left	corner of the frame
+     13
+     14	      =0050		     WIDTH_WINDOW equ 80d	     ; Window width
+     15
+     16	      =0020		     COLOR_SHADOW equ 32d	     ; Shadow color
+     17
+     18	0100			     Start:
+     19	0100  E8 0003			     Call Main
+     20	0103  E9 0164			     jmp Exit
+     21
+     22	0106			     Main    proc
+     23	0106  BE 0080				     mov si, CMD_PTR
+     24
+     25	0109  E8 0014				     Call GetInfo
+     26
+     27	010C  8A 26 0002r			     mov ah, color
+     28	0110  BB B800				     mov bx, VIDEO_PTR
+     29	0113  8E C3				     mov es, bx
+     30	0115  BF 0334				     mov di, (Y0 * WIDTH_WINDOW	+ X0) *	02d
+     31	0118  8B 1E 0003r			     mov bx, mode
+     32
+     33	011C  E8 0080				     Call DrawFrame
+     34
+     35	011F  C3				     ret
+     36	0120					     endp
+     37
+     38
+     39				     ;----------------------------------------------------------------------
+     40				     ; Get info	for program operation from the cmd line
+     41				     ; Entry: AX - symbol
+     42				     ;		      CX - number of symbol
+     43				     ;		      SI - pointer to the desired memory area
+     44				     ;		      width_x -	frame width
+     45				     ;		      height_y - frame height
+     46				     ;		      color - frame color
+     47				     ;		      text - frame text
+     48				     ; Assum: SI = 80h
+     49				     ; Destr: AX
+     50				     ;		      CX
+     51				     ;----------------------------------------------------------------------
+     52
+     53
+     54	0120			     GetInfo proc
+     55	0120  AC				     Lodsb
+     56	0121  8B C8				     mov cx, ax
+     57
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 2
+frame.asm
+
+
+
+     58	0123  E8 006F				     Call SkipSpace	     ;Getting the frame	width
+     59	0126  E8 0027				     Call GetNumber
+     60	0129  A2 0000r				     mov width_x, al
+     61
+     62	012C  E8 0066				     Call SkipSpace	     ;Getting the frame	height
+     63	012F  E8 001E				     Call GetNumber
+     64	0132  A2 0001r				     mov height_y, al
+     65
+     66	0135  E8 005D				     Call SkipSpace	     ;Getting the frame	color
+     67	0138  E8 0015				     Call GetNumber
+     68	013B  A2 0002r				     mov color,	al
+     69
+     70	013E  E8 0054				     Call SkipSpace	     ;Getting the frame	outline
+     71	0141  E8 0025				     Call GetMode
+     72
+     73	0144  E8 004E				     Call SkipSpace	     ;Getting the text for the frame
+     74	0147  89 36 0005r			     mov text, si
+     75	014B  89 0E 0007r			     mov len_text, cx
+     76
+     77	014F  C3				     ret
+     78	0150					     endp
+     79
+     80
+     81				     ;----------------------------------------------------------------------
+     82				     ;Getting an integer from a	string
+     83				     ;Entry: AX	- symbol
+     84				     ;		     DX	- integer
+     85				     ;		     SI	- pointer to character
+     86				     ;Assum: SI	= 80h
+     87				     ;Destr: BX
+     88				     ;		     CX
+     89				     ;		     DX
+     90				     ;----------------------------------------------------------------------
+     91
+     92
+     93	0150			     GetNumber	     proc
+     94	0150  BA 0000				     mov dx, 0
+     95	0153				     number:
+     96	0153  AC				     Lodsb
+     97	0154  3D 0020				     cmp ax, ' '
+     98	0157  74 0C				     je	not_number
+     99
+    100	0159  2D 0030				     sub ax, '0'
+    101	015C  92				     xchg ax, dx
+    102	015D  B3 0A				     mov bl, 10d
+    103	015F  F6 E3				     mul bl
+    104	0161  03 D0				     add dx, ax				     ;dx = 10 *	dx + ax
+    105
+    106	0163  E2 EE				     loop number
+    107
+    108	0165				     not_number:
+    109	0165  4E				     dec si
+    110
+    111	0166  8B C2				     mov ax, dx
+    112
+    113	0168  C3				     ret
+    114	0169					     endp
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 3
+frame.asm
+
+
+
+    115
+    116
+    117				     ;----------------------------------------------------------------------
+    118				     ;Getting the frame	outline	type
+    119				     ;Entry: AX	- symbol
+    120				     ;		     SI	- pointer to character
+    121				     ;		     mode - frame contour type
+    122				     ;Assum: SI	= 80h
+    123				     ;Destr: BX
+    124				     ;		     CX
+    125				     ;		     DX
+    126				     ;----------------------------------------------------------------------
+    127
+    128
+    129	0169			     GetMode proc
+    130	0169  AC				     Lodsb
+    131	016A  3D 002A				     cmp ax, '*'
+    132	016D  74 15				     je	custom_frame
+    133	016F  4E				     dec si
+    134
+    135	0170  E8 FFDD				     Call GetNumber
+    136	0173  BB 0009r				     mov bx, offset CONTROL_STR_ARRAY
+    137
+    138	0176  2D 0001				     sub ax, 1				     ;(ax - 01d) * 09d
+    139	0179  B2 09				     mov dl, N_SYM_FOR_FRAME
+    140	017B  F6 E2				     mul dl
+    141
+    142	017D  03 D8				     add bx, ax
+    143	017F  89 1E 0003r			     mov mode, bx
+    144	0183  C3				     ret
+    145
+    146	0184				     custom_frame:
+    147	0184  8B DE				     mov bx, si
+    148	0186  89 1E 0003r			     mov mode, bx
+    149
+    150	018A  83 C6 09				     add si, N_SYM_FOR_FRAME
+    151	018D  83 E9 09				     sub cx, N_SYM_FOR_FRAME
+    152
+    153	0190  C6 04 24				     mov byte ptr [si],	'$'
+    154	0193  46				     inc si
+    155
+    156	0194  C3				     ret
+    157	0195					     endp
+    158
+    159
+    160				     ;----------------------------------------------------------------------
+    161				     ;Function that skips spaces
+    162				     ;Entry: AL	- symbol
+    163				     ;		     SI	- pointer to character
+    164				     ;Destr: SI
+    165				     ;		     CX
+    166				     ;----------------------------------------------------------------------
+    167
+    168
+    169	0195			     SkipSpace	     proc
+    170	0195				     space:
+    171	0195  AC				     Lodsb
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 4
+frame.asm
+
+
+
+    172	0196  3D 0020				     cmp ax, ' '
+    173	0199  75 02				     jne no_space
+    174
+    175	019B  E2 F8				     loop space
+    176
+    177	019D				     no_space:
+    178	019D  4E				     dec si
+    179
+    180	019E  C3				     ret
+    181	019F					     endp
+    182
+    183
+    184				     ;----------------------------------------------------------------------
+    185				     ;Drawing a	frame
+    186				     ;Entry: AH	- color	attr
+    187				     ;		     AL	- symbol
+    188				     ;		     BX	- pointer to string
+    189				     ;		     CX	- number of lines
+    190				     ;		     DI	- offset to mem
+    191				     ;		     X0	- the initial x-coordinate of the left corner of the frame
+    192				     ;		     Y0	- the initial y-coordinate of the left corner of the frame
+    193				     ;		     width_x - frame width
+    194				     ;		     height_y -	frame height
+    195				     ;		     WIDTH_WINDOW - window width
+    196				     ;		     text - text of the	frame
+    197				     ;		     len_text -	text length of the frame
+    198				     ;Assum: EX	= 0b800h
+    199				     ;Destr: BX
+    200				     ;		     CX
+    201				     ;		     DI
+    202				     ;----------------------------------------------------------------------
+    203
+    204
+    205	019F			     DrawFrame	     proc
+    206	019F  E8 0026				     Call DrawLine			     ;Drawing the first	line
+    207	01A2  E8 006B				     Call MoveLine
+    208
+    209	01A5  8A 0E 0001r			     mov cl, height_y
+    210	01A9  83 E9 02				     sub cx, 02d				     ;Number of	center lines
+    211	01AC  83 C3 03				     add bx, 03d
+    212
+    213	01AF				     y1_to_y2:						     ;Drawing the center lines
+    214	01AF  83 EB 03				     sub bx, 03d
+    215
+    216	01B2  8B E9				     mov bp, cx
+    217	01B4  E8 0011				     Call DrawLine
+    218	01B7  E8 0056				     Call MoveLine
+    219	01BA  8B CD				     mov cx, bp
+    220
+    221	01BC  E2 F1				     loop y1_to_y2
+    222
+    223	01BE  E8 0007				     Call DrawLine			     ;Drawing the last line
+    224
+    225	01C1  E8 0019				     Call DrawShadow			     ;Drawing the shadow of the	frame
+    226
+    227	01C4  E8 0057				     Call PrintText			     ;Outputting text in a frame
+    228
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 5
+frame.asm
+
+
+
+    229	01C7  C3				     ret
+    230	01C8					     endp
+    231
+    232
+    233				     ;----------------------------------------------------------------------
+    234				     ;Writes a string to video mem
+    235				     ;Entry: AH	- color	attr
+    236				     ;		     AL	- symbol
+    237				     ;		     BX	- pointer to string
+    238				     ;		     DI	- offset to mem
+    239				     ;		     width_x - frame width
+    240				     ;Assum: EX	= 0b800h
+    241				     ;Destr: AX
+    242				     ;		     BX
+    243				     ;		     CX
+    244				     ;		     DI
+    245				     ;----------------------------------------------------------------------
+    246
+    247
+    248	01C8			     DrawLine proc
+    249	01C8  8A 07				     mov al, [bx]
+    250	01CA  AB				     Stosw		     ;Print first symbol
+    251
+    252	01CB  43				     inc bx
+    253	01CC  8A 07				     mov al, [bx]
+    254	01CE  8A 0E 0000r			     mov cl, width_x
+    255	01D2  83 E9 02				     sub cx, 02d
+    256
+    257	01D5  F3> AB				     rep Stosw		     ;Print second symbol
+    258
+    259	01D7  43				     inc bx
+    260	01D8  8A 07				     mov al, [bx]
+    261	01DA  AB				     Stosw		     ;Print third symbol
+    262
+    263	01DB  43				     inc bx
+    264
+    265	01DC  C3				     ret
+    266	01DD					     endp
+    267
+    268
+    269				     ;----------------------------------------------------------------------
+    270				     ;Draws a frame shadow
+    271				     ;Entry: AH	- color	attr
+    272				     ;		     AL	- symbol
+    273				     ;		     DI	- offset to mem
+    274				     ;		     X0	- the initial x-coordinate of the left corner of the frame
+    275				     ;		     Y0	- the initial y-coordinate of the left corner of the frame
+    276				     ;		     width_x - frame width
+    277				     ;		     height_y -	frame height
+    278				     ;		     WIDTH_WINDOW - window width
+    279				     ;Assum: EX	= 0b800h
+    280				     ;Destr: AX
+    281				     ;		     CX
+    282				     ;		     DX
+    283				     ;		     DI
+    284				     ;----------------------------------------------------------------------
+    285
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 6
+frame.asm
+
+
+
+    286
+    287	01DD			     DrawShadow	     proc
+    288	01DD  B0 20				     mov al, ' '
+    289	01DF  B4 20				     mov ah, COLOR_SHADOW
+    290
+    291	01E1  8A 0E 0001r			     mov cl, height_y
+    292	01E5  83 E9 01				     sub cx, 01d
+    293
+    294	01E8  BF 01EA				     mov di, (Y0 + 01d)	* WIDTH_WINDOW + X0
+    295	01EB  BA 0000				     mov dx , 00d
+    296	01EE  8A 16 0000r			     mov dl, width_x
+    297	01F2  03 FA				     add di, dx
+    298	01F4  D1 E7				     sal di, 1
+    299
+    300	01F6				     shadow:
+    301	01F6  26: 89 05				     mov es:[di], ax
+    302	01F9  81 C7 00A0			     add di, WIDTH_WINDOW * 02d
+    303	01FD  E2 F7				     loop shadow
+    304
+    305	01FF  D1 E2				     sal dx, 1
+    306	0201  2B FA				     sub di, dx
+    307	0203  83 C7 02				     add di, 02d
+    308
+    309	0206  B9 0000				     mov cx, 00d
+    310	0209  8A 0E 0000r			     mov cl, width_x
+    311	020D  F3> AB				     rep Stosw
+    312
+    313	020F  C3				     ret
+    314	0210					     endp
+    315
+    316
+    317				     ;----------------------------------------------------------------------
+    318				     ;Calculating the address of the beginning of a new	frame line
+    319				     ;Entry: AH	- color	attr
+    320				     ;		     AL	- symbol
+    321				     ;		     DI	- offset to mem
+    322				     ;		     width_x - frame width
+    323				     ;		     WIDTH_WINDOW - window width
+    324				     ;Destr: CX
+    325				     ;		     DI
+    326				     ;----------------------------------------------------------------------
+    327
+    328
+    329	0210			     MoveLine	     proc
+    330	0210  8A 0E 0000r			     mov cl, width_x
+    331
+    332	0214  83 E9 50				     sub cx, WIDTH_WINDOW	     ;We count the coordinates of the beginning	of a+
+    333				     new line
+    334	0217  F7 D9				     neg cx
+    335	0219  D1 E1				     sal cx, 1
+    336	021B  03 F9				     add di, cx
+    337
+    338	021D  C3				     ret
+    339	021E					     endp
+    340
+    341
+    342				     ;----------------------------------------------------------------------
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 7
+frame.asm
+
+
+
+    343				     ;Displays text information	in a frame
+    344				     ;Entry: AH	- color	attr
+    345				     ;		     AL	- symbol
+    346				     ;		     BX	- pointer to string
+    347				     ;		     CX	- number of lines
+    348				     ;		     SI	- ptr to text
+    349				     ;		     width_x - frame width
+    350				     ;		     height_y -	frame height
+    351				     ;		     WIDTH_WINDOW - width window
+    352				     ;		     len_text -	text length of the frame
+    353				     ;Assum: EX	= 0b800h
+    354				     ;Destr: AH
+    355				     ;----------------------------------------------------------------------
+    356
+    357
+    358	021E			     PrintText	     proc
+    359	021E  8B 36 0005r			     mov si, text
+    360
+    361	0222  E8 0008				     Call GetCenterCoord
+    362
+    363	0225  8A 26 0002r			     mov ah, color
+    364	0229  E8 0035				     Call PrintStr
+    365
+    366	022C  C3				     ret
+    367	022D					     endp
+    368
+    369
+    370				     ;----------------------------------------------------------------------
+    371				     ;Returns the coordinates of the center
+    372				     ;coord = ((y / 02d	+ y0) *	80d + (x / 02d + x0 - len_text / 02d)) * 02d
+    373				     ;Entry: AX	- y-coordinates
+    374				     ;		     BX	- x-coordinates
+    375				     ;		     X0	- the initial x-coordinate of the left corner of the frame
+    376				     ;		     Y0	- the initial y-coordinate of the left corner of the frame
+    377				     ;		     width_x - frame width
+    378				     ;		     height_y -	frame height
+    379				     ;		     WIDTH_WINDOW - width window
+    380				     ;		     len_text -	text length of the frame
+    381				     ;Destr: AX
+    382				     ;		     BX
+    383				     ;		     DX
+    384				     ;----------------------------------------------------------------------
+    385
+    386
+    387	022D			     GetCenterCoord  proc
+    388	022D  B2 02				     mov dl, 02d
+    389
+    390	022F  FF 36 0007r			     push len_text
+    391	0233  D1 3E 0007r			     sar len_text, 1
+    392
+    393	0237  B4 00				     mov ah, 0
+    394	0239  A0 0000r				     mov al, width_x		     ;x	/ 02d +	x0 - len_text /	02d
+    395	023C  D1 F8				     sar ax, 1
+    396	023E  05 000A				     add ax, X0
+    397	0241  2B 06 0007r			     sub ax, len_text
+    398	0245  8B D8				     mov bx, ax
+    399
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 8
+frame.asm
+
+
+
+    400	0247  B4 00				     mov ah, 0
+    401	0249  A0 0001r				     mov al, height_y		     ;(y / 02d + y0) * 80d
+    402	024C  D1 F8				     sar ax, 1
+    403	024E  05 0005				     add ax, Y0
+    404	0251  BA 0050				     mov dx, WIDTH_WINDOW
+    405	0254  F7 E2				     mul dx
+    406
+    407	0256  03 C3				     add ax, bx				     ;(y / 02d + y0) * 80d + (x	/ 02d +	x0 -+
+    408				     len_text /	02d)
+    409
+    410	0258  D1 E0				     sal ax, 1				     ;((y / 02d	+ y0) *	80d + (x/2 + x0	-   +
+    411				     len_text /	02d)) *	02d
+    412
+    413	025A  8F 06 0007r			     pop len_text
+    414
+    415	025E  8B F8				     mov di, ax
+    416	0260  C3				     ret
+    417	0261					     endp
+    418
+    419
+    420				     ;----------------------------------------------------------------------
+    421				     ;Writes a str to video mem
+    422				     ;Entry: AH	- color	attr
+    423				     ;		     AL	- symbol
+    424				     ;		     SI	- pointer to str
+    425				     ;Assum: ES	= 0b800h
+    426				     ;Destr: CX
+    427				     ;		     DI
+    428				     ;----------------------------------------------------------------------
+    429
+    430
+    431	0261			     PrintStr	     proc
+    432	0261  8B 0E 0007r			     mov cx, len_text
+    433
+    434	0265				     print_str:
+    435	0265  AC				     lodsb
+    436
+    437	0266  AB				     Stosw
+    438	0267  E2 FC				     loop print_str
+    439
+    440	0269  C3				     ret
+    441	026A					     endp
+    442
+    443
+    444	026A			     Exit:
+    445	026A  B8 4C00				     mov ax, 4c00h
+    446	026D  CD 21				     int 21h
+    447
+    448
+    449	026F			     .data
+    450
+    451
+    452	0000  ??		     width_x   db ?
+    453	0001  ??		     height_y  db ?
+    454	0002  ??		     color     db ?
+    455	0003  ????		     mode      dw ?
+    456	0005  ????		     text      dw ?
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 9
+frame.asm
+
+
+
+    457	0007  ????		     len_text  dw ?
+    458
+    459
+    460	0009  EF BF BD CD BB EF	BF+  CONTROL_STR_ARRAY db "�ͻ� ��ͼ"
+    461	      BD 20 EF BF BD EF	BF+
+    462	      BD CD BC
+    463	001A  03 03 03 03 20 03	03+		       db "	"
+    464	      03 03
+    465	0023  2B 2D 2B 7C 20 7C	2B+		       db "+-+|	|+-+"
+    466	      2D 2B
+    467	002C  2F 2D 5C 7C 20 7C	5C+		       db "/-\|	|\_/"
+    468	      5F 2F
+    469
+    470
+    471				     end     Start
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 10
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??DATE				  Text	 "02/26/24"
+??FILENAME			  Text	 "frame	  "
+??TIME				  Text	 "09:50:08"
+??VERSION			  Number 040A
+@32BIT				  Text	 0
+@CODE				  Text	 DGROUP
+@CODESIZE			  Text	 0
+@CPU				  Text	 0103H
+@CURSEG				  Text	 _DATA
+@DATA				  Text	 DGROUP
+@DATASIZE			  Text	 0
+@FILENAME			  Text	 FRAME
+@INTERFACE			  Text	 000H
+@MODEL				  Text	 1
+@STACK				  Text	 DGROUP
+@WORDSIZE			  Text	 2
+CMD_PTR				  Number 0080
+COLOR				  Byte	 DGROUP:0002
+COLOR_SHADOW			  Number 0020
+CONTROL_STR_ARRAY		  Byte	 DGROUP:0009
+CUSTOM_FRAME			  Near	 DGROUP:0184
+DRAWFRAME			  Near	 DGROUP:019F
+DRAWLINE			  Near	 DGROUP:01C8
+DRAWSHADOW			  Near	 DGROUP:01DD
+EXIT				  Near	 DGROUP:026A
+GETCENTERCOORD			  Near	 DGROUP:022D
+GETINFO				  Near	 DGROUP:0120
+GETMODE				  Near	 DGROUP:0169
+GETNUMBER			  Near	 DGROUP:0150
+HEIGHT_Y			  Byte	 DGROUP:0001
+LEN_TEXT			  Word	 DGROUP:0007
+MAIN				  Near	 DGROUP:0106
+MODE				  Word	 DGROUP:0003
+MOVELINE			  Near	 DGROUP:0210
+NOT_NUMBER			  Near	 DGROUP:0165
+NO_SPACE			  Near	 DGROUP:019D
+NUMBER				  Near	 DGROUP:0153
+N_SYM_FOR_FRAME			  Number 0009
+PRINTSTR			  Near	 DGROUP:0261
+PRINTTEXT			  Near	 DGROUP:021E
+PRINT_STR			  Near	 DGROUP:0265
+SHADOW				  Near	 DGROUP:01F6
+SKIPSPACE			  Near	 DGROUP:0195
+SPACE				  Near	 DGROUP:0195
+START				  Near	 DGROUP:0100
+TEXT				  Word	 DGROUP:0005
+VIDEO_PTR			  Number B800
+WIDTH_WINDOW			  Number 0050
+WIDTH_X				  Byte	 DGROUP:0000
+X0				  Number 000A
+Y0				  Number 0005
+Y1_TO_Y2			  Near	 DGROUP:01AF
+Turbo Assembler	 Version 4.1	    02/26/24 09:50:09	    Page 11
+Symbol Table
+
+
+
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  _DATA				  16  0035 Word	  Public  DATA
+  _TEXT				  16  026F Word	  Public  CODE
+
